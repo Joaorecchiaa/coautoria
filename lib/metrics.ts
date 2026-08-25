@@ -1,6 +1,7 @@
 import type { SheetRow } from "./sheets";
 
 export type Deal = {
+  rowNumber: number; // número da linha na planilha (2 = primeira venda)
   dataInclusao: string;
   livro: string;
   simonato: string;
@@ -20,8 +21,10 @@ export type Deal = {
 
 export function parseDeals(rows: SheetRow[]): Deal[] {
   return rows
-    .filter((r) => (r[3] || "").trim() !== "") // precisa ter Nome Coautor
-    .map((r) => ({
+    .map((r, i) => ({ r, rowNumber: i + 2 })) // linha 1 = cabeçalho
+    .filter(({ r }) => (r[3] || "").trim() !== "") // precisa ter Nome Coautor
+    .map(({ r, rowNumber }) => ({
+      rowNumber,
       dataInclusao: r[0] || "",
       livro: r[1] || "",
       simonato: (r[2] || "").trim(),
@@ -46,6 +49,10 @@ function parseValor(raw: string | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+export function monthKeyOf(deal: Pick<Deal, "dataFechamento" | "dataInclusao">): string | null {
+  return monthKey(deal.dataFechamento) || monthKey(deal.dataInclusao);
+}
+
 function monthKey(dateStr: string): string | null {
   if (!dateStr) return null;
   const m = dateStr.match(/(\d{4})-(\d{2})/);
@@ -53,6 +60,27 @@ function monthKey(dateStr: string): string | null {
   const br = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
   if (br) return `${br[3]}-${br[2]}`;
   return null;
+}
+
+const MONTH_NAMES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+export function formatMonthLabel(key: string): string {
+  const [year, month] = key.split("-");
+  const idx = Number(month) - 1;
+  return `${MONTH_NAMES[idx] ?? month} de ${year}`;
 }
 
 export function buildDashboardMetrics(deals: Deal[]) {
@@ -65,7 +93,7 @@ export function buildDashboardMetrics(deals: Deal[]) {
 
   const byMonthMap = new Map<string, { count: number; value: number }>();
   for (const d of deals) {
-    const key = monthKey(d.dataFechamento) || monthKey(d.dataInclusao);
+    const key = monthKeyOf(d);
     if (!key) continue;
     const cur = byMonthMap.get(key) || { count: 0, value: 0 };
     cur.count += 1;
