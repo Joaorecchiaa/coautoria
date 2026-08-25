@@ -1,70 +1,47 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { extractDealIdsFromSheet, processDealForSheet } from "@/lib/coautoria";
+import { extractDealIdsFromSheet, processWonDealsSince } from "@/lib/coautoria";
 import { appendRows, getSheetRows } from "@/lib/sheets";
 
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-// Se você configurou usuário/senha (autenticação HTTP Basic) ao criar o webhook
-// no Pipedrive, defina WEBHOOK_BASIC_USER e WEBHOOK_BASIC_PASS nas variáveis de
-// ambiente para exigir essas credenciais aqui. Se não definir nenhuma das duas,
-// a rota aceita qualquer chamada (não recomendado em produção, mas funciona).
-function isAuthorized(request: Request): boolean {
-  const user = process.env.WEBHOOK_BASIC_USER;
-  const pass = process.env.WEBHOOK_BASIC_PASS;
-  if (!user && !pass) return true;
+// Quantos dias pra trás olhar: o histórico antigo já está na planilha, então
+// só precisamos pegar o que ganhou/mudou recentemente. 45 dias dá uma margem
+// de segurança confortável (cobre o mês atual e o anterior) sem varrer o
+// histórico todo — é isso que deixa o botão "Atualizar" rápido.
+const LOOKBACK_DAYS = 45;
 
-  const header = request.headers.get("authorization") || "";
-  if (!header.startsWith("Basic ")) return false;
-
-  const decoded = Buffer.from(header.slice(6), "base64").toString("utf-8");
-  const [u, p] = decoded.split(":");
-  return u === user && p === pass;
-}
-
-export async function POST(request: Request) {
-  if (!isAuthorized(request)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
+// Rota "Atualizar" chamada pelo botão do dashboard: busca só os negócios
+// ganhos/atualizados recentemente no Pipedrive, na hora que o usuário pedir.
+// Não exige o CRON_SECRET porque é disparada pelo próprio time direto do
+// dashboard.
+export async function POST() {
   try {
-    const payload = await request.json();
-
-    // Formato padrão dos webhooks do Pipedrive (v1): o negócio atualizado vem
-    // em payload.current (ou payload.data, em versões mais novas do formato).
-    // Também aceitamos o formato mais simples das Automations do Pipedrive
-    // (ação "Enviar solicitação de webhook" montada com o construtor de
-    // chave/valor), que manda só { "deal_id": 123 } no corpo.
-    const deal = payload?.current || payload?.data || payload?.object;
-    const dealId = Number(
-      deal?.id ?? payload?.meta?.id ?? payload?.deal_id ?? payload?.dealId
-    );
-
-    if (!dealId) {
-      return NextResponse.json({ error: "não encontrei o id do negócio no payload" }, {
-        status: 400,
-      });
-    }
+    const sinceISO = new Date(
+      Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
 
     const existingRows = await getSheetRows();
     const existingIds = extractDealIdsFromSheet(existingRows);
+    const { newRows, consideredCount } = await processWonDealsSince(
+      sinceISO,
+      existingIds
+    );
 
-    const result = await processDealForSheet(dealId, existingIds);
-
-    if (result.status === "added") {
-      await appendRows([result.row]);
-      revalidatePath("/");
+    if (newRows.length) {
+      await appendRows(newRows);
     }
 
-    return NextResponse.json({ dealId, resultado: result.status });
+    revalidatePath("/");
+
+    return NextResponse.json({
+      candidatosConsiderados: consideredCount,
+      novosAdicionados: newRows.length,
+      janelaDias: LOOKBACK_DAYS,
+    });
   } catch (err: any) {
-    console.error("Erro no webhook do Pipedrive:", err);
+    console.error("Erro ao atualizar:", err);
     return NextResponse.json({ error: err?.message || "erro desconhecido" }, { status: 500 });
   }
-}
-
-// O Pipedrive faz uma checagem inicial (alguns fluxos usam GET) — respondemos OK
-// pra facilitar validação manual da URL no navegador também.
-export async function GET() {
-  return NextResponse.json({ ok: true, info: "Webhook do Pipedrive está no ar. Use POST." });
 }
