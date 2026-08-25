@@ -58,18 +58,18 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
     return [...map.entries()].sort(([a], [b]) => b.localeCompare(a));
   }, [filtered, thisMonth]);
 
-  async function markOk(rowNumber: number) {
+  async function toggleSimonato(rowNumber: number, next: "OK" | "-") {
     setSavingRow(rowNumber);
     setErrorRow(null);
     try {
       const res = await fetch("/api/mark-ok", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rowNumber }),
+        body: JSON.stringify({ rowNumber, value: next }),
       });
       if (!res.ok) throw new Error("falha ao salvar");
       setDealsState((prev) =>
-        prev.map((d) => (d.rowNumber === rowNumber ? { ...d, simonato: "OK" } : d))
+        prev.map((d) => (d.rowNumber === rowNumber ? { ...d, simonato: next } : d))
       );
     } catch {
       setErrorRow(rowNumber);
@@ -120,7 +120,7 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
         </h3>
         <DealsTableGrid
           deals={currentMonthDeals}
-          onMarkOk={markOk}
+          onToggle={toggleSimonato}
           savingRow={savingRow}
           errorRow={errorRow}
           emptyLabel="Nenhuma venda fechada este mês ainda."
@@ -145,7 +145,7 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
                 <div className="border-t border-border">
                   <DealsTableGrid
                     deals={groupDeals}
-                    onMarkOk={markOk}
+                    onToggle={toggleSimonato}
                     savingRow={savingRow}
                     errorRow={errorRow}
                   />
@@ -161,35 +161,45 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
 
 function DealsTableGrid({
   deals,
-  onMarkOk,
+  onToggle,
   savingRow,
   errorRow,
   emptyLabel = "Nenhuma venda encontrada.",
 }: {
   deals: Deal[];
-  onMarkOk: (rowNumber: number) => void;
+  onToggle: (rowNumber: number, next: "OK" | "-") => void;
   savingRow: number | null;
   errorRow: number | null;
   emptyLabel?: string;
 }) {
   return (
     <div className="overflow-hidden rounded-xl2 border border-border bg-card shadow-card">
-      <div className="max-h-[520px] overflow-auto">
-        <table className="w-full min-w-[1300px] text-sm">
+      <div className="max-h-[560px] overflow-y-auto">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col className="w-[8%]" />
+            <col className="w-[10%]" />
+            <col className="w-[13%]" />
+            <col className="w-[15%]" />
+            <col className="w-[8%]" />
+            <col className="w-[9%]" />
+            <col className="w-[10%]" />
+            <col className="w-[16%]" />
+            <col className="w-[7%]" />
+            <col className="w-[4%]" />
+          </colgroup>
           <thead className="sticky top-0 bg-card">
             <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-              <th className="px-4 py-3">Fechamento</th>
-              <th className="px-4 py-3">Livro</th>
-              <th className="px-4 py-3">Coautor</th>
-              <th className="px-4 py-3">Entregável</th>
-              <th className="px-4 py-3 text-right">Valor</th>
-              <th className="px-4 py-3">Squad</th>
-              <th className="px-4 py-3">Closer</th>
-              <th className="px-4 py-3">Celular</th>
-              <th className="px-4 py-3">E-mail</th>
-              <th className="px-4 py-3">LinkedIn</th>
-              <th className="px-4 py-3">Double-check</th>
-              <th className="px-4 py-3">Pipe</th>
+              <th className="px-3 py-3">Fechamento</th>
+              <th className="px-3 py-3">Livro</th>
+              <th className="px-3 py-3">Coautor</th>
+              <th className="px-3 py-3">Entregável</th>
+              <th className="px-3 py-3 text-right">Valor</th>
+              <th className="px-3 py-3">Squad</th>
+              <th className="px-3 py-3">Closer</th>
+              <th className="px-3 py-3">Contato</th>
+              <th className="px-3 py-3">Double-check</th>
+              <th className="px-3 py-3">Pipe</th>
             </tr>
           </thead>
           <tbody>
@@ -198,58 +208,54 @@ function DealsTableGrid({
               const isSaving = savingRow === d.rowNumber;
               const hasError = errorRow === d.rowNumber;
               return (
-                <tr key={d.rowNumber} className="border-b border-border/60 last:border-0">
-                  <td className="whitespace-nowrap px-4 py-3 text-muted">
-                    {d.dataFechamento || "—"}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-muted">{d.livro || "—"}</td>
-                  <td className="px-4 py-3 font-medium text-ink">{d.nomeCoautor}</td>
-                  <td className="px-4 py-3 text-muted">{d.entregaveis}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+                <tr key={d.rowNumber} className="border-b border-border/60 align-top last:border-0">
+                  <td className="break-words px-3 py-3 text-muted">{d.dataFechamento || "—"}</td>
+                  <td className="break-words px-3 py-3 text-muted">{d.livro || "—"}</td>
+                  <td className="break-words px-3 py-3 font-medium text-ink">{d.nomeCoautor}</td>
+                  <td className="break-words px-3 py-3 text-muted">{d.entregaveis}</td>
+                  <td className="break-words px-3 py-3 text-right tabular-nums">
                     {formatBRL(d.valor)}
                   </td>
-                  <td className="px-4 py-3 text-muted">{d.squad || "—"}</td>
-                  <td className="px-4 py-3 text-muted">{d.closer || "—"}</td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    {d.celular ? (
-                      <a href={`tel:${d.celular}`} className="text-muted hover:text-ink">
-                        {d.celular}
-                      </a>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
+                  <td className="break-words px-3 py-3 text-muted">{d.squad || "—"}</td>
+                  <td className="break-words px-3 py-3 text-muted">{d.closer || "—"}</td>
+                  <td className="break-words px-3 py-3 text-muted">
+                    <div className="flex flex-col gap-0.5">
+                      {d.celular ? (
+                        <a href={`tel:${d.celular}`} className="truncate hover:text-ink">
+                          {d.celular}
+                        </a>
+                      ) : null}
+                      {d.email ? (
+                        <a href={`mailto:${d.email}`} className="truncate hover:text-ink">
+                          {d.email}
+                        </a>
+                      ) : null}
+                      {d.linkedin ? (
+                        <a
+                          href={d.linkedin.startsWith("http") ? d.linkedin : `https://${d.linkedin}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate text-brand-600 hover:text-brand-700"
+                        >
+                          LinkedIn
+                        </a>
+                      ) : null}
+                      {!d.celular && !d.email && !d.linkedin ? "—" : null}
+                    </div>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    {d.email ? (
-                      <a href={`mailto:${d.email}`} className="text-muted hover:text-ink">
-                        {d.email}
-                      </a>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {d.linkedin ? (
-                      <a
-                        href={d.linkedin.startsWith("http") ? d.linkedin : `https://${d.linkedin}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-brand-600 underline decoration-brand-300 underline-offset-2 hover:text-brand-700"
-                      >
-                        perfil
-                      </a>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     {isOk ? (
-                      <span className="rounded-full bg-accent-teal/10 px-2.5 py-1 text-xs font-medium text-accent-teal">
-                        OK
-                      </span>
+                      <button
+                        onClick={() => onToggle(d.rowNumber, "-")}
+                        disabled={isSaving}
+                        title="Clique para desmarcar"
+                        className="rounded-full bg-accent-teal/10 px-2.5 py-1 text-xs font-medium text-accent-teal transition hover:bg-accent-teal/20 disabled:opacity-60"
+                      >
+                        {isSaving ? "..." : "OK"}
+                      </button>
                     ) : (
                       <button
-                        onClick={() => onMarkOk(d.rowNumber)}
+                        onClick={() => onToggle(d.rowNumber, "OK")}
                         disabled={isSaving}
                         className="rounded-full bg-accent-amber/10 px-2.5 py-1 text-xs font-medium text-accent-amber transition hover:bg-accent-amber/20 disabled:opacity-60"
                       >
@@ -257,10 +263,10 @@ function DealsTableGrid({
                       </button>
                     )}
                     {hasError ? (
-                      <div className="mt-1 text-xs text-accent-coral">Erro ao salvar, tente de novo</div>
+                      <div className="mt-1 text-xs text-accent-coral">Erro, tente de novo</div>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     {d.pipe && d.pipe.startsWith("http") ? (
                       <a
                         href={d.pipe}
@@ -279,7 +285,7 @@ function DealsTableGrid({
             })}
             {deals.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-10 text-center text-muted">
+                <td colSpan={10} className="px-4 py-10 text-center text-muted">
                   {emptyLabel}
                 </td>
               </tr>
