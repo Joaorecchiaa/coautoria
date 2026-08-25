@@ -116,6 +116,13 @@ export async function getPipelineName(
   return pipelinesCache[String(pipelineId)] || String(pipelineId);
 }
 
+// A API v2 do Pipedrive não aceita milissegundos no datetime — formata como
+// "YYYY-MM-DDTHH:MM:SSZ" (o mesmo que toISOString() produz, só sem a parte
+// ".sss" antes do Z).
+export function toPipedriveDateTime(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
 // ---- negócios ganhos e atualizados desde uma data (candidatos recentes) ----
 // Usa a API v2, que permite filtrar por status + data de atualização e já
 // devolve os campos customizados junto — não precisamos mais buscar por texto
