@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { extractDealIdsFromSheet, processWonDealsSince } from "@/lib/coautoria";
+import { toPipedriveDateTime } from "@/lib/pipedrive";
 import { appendRows, getSheetRows } from "@/lib/sheets";
 
 export const maxDuration = 60;
@@ -18,9 +19,9 @@ const LOOKBACK_DAYS = 45;
 // dashboard.
 export async function POST() {
   try {
-    const sinceISO = new Date(
-      Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const sinceISO = toPipedriveDateTime(
+      new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+    );
 
     const existingRows = await getSheetRows();
     const existingIds = extractDealIdsFromSheet(existingRows);
