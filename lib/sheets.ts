@@ -54,15 +54,16 @@ export async function getSheetRows(): Promise<SheetRow[]> {
   return (res.data.values as SheetRow[]) || [];
 }
 
-// Marca a coluna C (SIMONATO) de uma linha específica como "OK".
+// Define o valor da coluna C (SIMONATO) de uma linha específica.
 // rowNumber é o número da linha DENTRO da planilha (linha 2 = primeira venda).
-export async function markSimonatoOk(rowNumber: number) {
+// value: "OK" para marcar, "-" para desmarcar (pendente).
+export async function setSimonato(rowNumber: number, value: "OK" | "-") {
   const sheets = sheetsClient();
   await sheets.spreadsheets.values.update({
     spreadsheetId: spreadsheetId(),
     range: `${tabName()}!C${rowNumber}`,
     valueInputOption: "USER_ENTERED",
-    requestBody: { values: [["OK"]] },
+    requestBody: { values: [[value]] },
   });
 }
 
