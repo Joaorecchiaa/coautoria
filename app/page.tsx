@@ -76,9 +76,6 @@ export default async function DashboardPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-          Todas as vendas
-        </h2>
         <DealsTable deals={deals} />
       </section>
     </main>
