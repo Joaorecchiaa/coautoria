@@ -78,3 +78,41 @@ export async function appendRows(rows: (string | number)[][]) {
     requestBody: { values: rows },
   });
 }
+
+// Define o valor da coluna B (LIVRO) de uma venda específica.
+export async function setLivro(rowNumber: number, livro: string) {
+  const sheets = sheetsClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: spreadsheetId(),
+    range: `${tabName()}!B${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[livro]] },
+  });
+}
+
+// Catálogo de livros cadastrados: guardado na coluna Q da mesma aba (mesma
+// planilha, sem precisar de uma segunda aba), separado da coluna B (que
+// guarda o livro de cada venda). Assim dá pra cadastrar um livro novo mesmo
+// antes de vinculá-lo a alguma venda.
+const LIVROS_COL = "Q";
+
+export async function getLivrosCatalog(): Promise<string[]> {
+  const sheets = sheetsClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: spreadsheetId(),
+    range: `${tabName()}!${LIVROS_COL}2:${LIVROS_COL}2000`,
+  });
+  const values = (res.data.values as string[][]) || [];
+  return values.map((r) => (r[0] || "").trim()).filter(Boolean);
+}
+
+export async function addLivroToCatalog(nome: string) {
+  const sheets = sheetsClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: spreadsheetId(),
+    range: `${tabName()}!${LIVROS_COL}2:${LIVROS_COL}`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [[nome]] },
+  });
+}
