@@ -1,3 +1,5 @@
+import { RefreshButton } from "./RefreshButton";
+
 function formatUpdatedAt(date: Date) {
   const time = date.toLocaleTimeString("pt-BR", {
     hour: "2-digit",
@@ -23,13 +25,16 @@ export function DashboardHeader({ updatedAt }: { updatedAt: Date }) {
             planilha de backlog.
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <span className="text-xs font-semibold uppercase tracking-widest text-white/50">
-            Board Academy
-          </span>
-          <span className="text-xs text-white/60">
-            Atualizado em {formatUpdatedAt(updatedAt)}
-          </span>
+        <div className="flex items-end gap-4">
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-xs font-semibold uppercase tracking-widest text-white/50">
+              Board Academy
+            </span>
+            <span className="text-xs text-white/60">
+              Atualizado em {formatUpdatedAt(updatedAt)}
+            </span>
+          </div>
+          <RefreshButton />
         </div>
       </div>
     </header>
