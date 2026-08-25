@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Deal } from "@/lib/metrics";
 import { formatBRL, formatMonthLabel, monthKeyOf } from "@/lib/metrics";
 
@@ -17,10 +17,23 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
   const [savingRow, setSavingRow] = useState<number | null>(null);
   const [errorRow, setErrorRow] = useState<number | null>(null);
 
+  // Catálogo de livros cadastrados (coluna Q da planilha) — usado pra montar
+  // o dropdown de cada venda. Carrega uma vez ao abrir o dashboard.
+  const [livroCatalog, setLivroCatalog] = useState<string[]>([]);
+  const [savingLivroRow, setSavingLivroRow] = useState<number | null>(null);
+  const [cadastrandoLivro, setCadastrandoLivro] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/livros")
+      .then((res) => res.json())
+      .then((data) => setLivroCatalog(data.livros || []))
+      .catch(() => {});
+  }, []);
+
   const livroOptions = useMemo(() => {
-    const set = new Set(dealsState.map((d) => d.livro).filter(Boolean));
-    return [...set].sort();
-  }, [dealsState]);
+    const set = new Set([...livroCatalog, ...dealsState.map((d) => d.livro).filter(Boolean)]);
+    return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [dealsState, livroCatalog]);
 
   const filtered = useMemo(() => {
     let list = dealsState;
@@ -78,6 +91,48 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
     }
   }
 
+  async function updateLivro(rowNumber: number, livro: string) {
+    setSavingLivroRow(rowNumber);
+    try {
+      const res = await fetch("/api/set-livro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowNumber, livro }),
+      });
+      if (!res.ok) throw new Error("falha ao salvar livro");
+      setDealsState((prev) =>
+        prev.map((d) => (d.rowNumber === rowNumber ? { ...d, livro } : d))
+      );
+    } catch {
+      // silencioso — o select volta pro valor salvo no próximo carregamento
+    } finally {
+      setSavingLivroRow(null);
+    }
+  }
+
+  async function cadastrarLivro() {
+    const nome = window.prompt("Nome do novo livro:");
+    if (!nome || !nome.trim()) return;
+    setCadastrandoLivro(true);
+    try {
+      const res = await fetch("/api/livros", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: nome.trim() }),
+      });
+      if (!res.ok) throw new Error("falha ao cadastrar livro");
+      setLivroCatalog((prev) =>
+        prev.some((l) => l.toLowerCase() === nome.trim().toLowerCase())
+          ? prev
+          : [...prev, nome.trim()]
+      );
+    } catch {
+      window.alert("Não consegui cadastrar o livro, tenta de novo.");
+    } finally {
+      setCadastrandoLivro(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-xl2 border border-border bg-card p-4 shadow-card">
@@ -101,6 +156,13 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
               </option>
             ))}
           </select>
+          <button
+            onClick={cadastrarLivro}
+            disabled={cadastrandoLivro}
+            className="rounded-lg border border-dashed border-brand-400 px-3 py-2 text-sm font-medium text-brand-600 transition hover:bg-brand-500/5 disabled:opacity-60"
+          >
+            {cadastrandoLivro ? "Cadastrando..." : "+ Cadastrar livro"}
+          </button>
           <label className="flex items-center gap-2 text-sm text-muted">
             <input
               type="checkbox"
@@ -123,6 +185,9 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
           onToggle={toggleSimonato}
           savingRow={savingRow}
           errorRow={errorRow}
+          livroOptions={livroOptions}
+          onLivroChange={updateLivro}
+          savingLivroRow={savingLivroRow}
           emptyLabel="Nenhuma venda fechada este mês ainda."
         />
       </div>
@@ -148,6 +213,9 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
                     onToggle={toggleSimonato}
                     savingRow={savingRow}
                     errorRow={errorRow}
+                    livroOptions={livroOptions}
+                    onLivroChange={updateLivro}
+                    savingLivroRow={savingLivroRow}
                   />
                 </div>
               </details>
@@ -164,12 +232,18 @@ function DealsTableGrid({
   onToggle,
   savingRow,
   errorRow,
+  livroOptions,
+  onLivroChange,
+  savingLivroRow,
   emptyLabel = "Nenhuma venda encontrada.",
 }: {
   deals: Deal[];
   onToggle: (rowNumber: number, next: "OK" | "-") => void;
   savingRow: number | null;
   errorRow: number | null;
+  livroOptions: string[];
+  onLivroChange: (rowNumber: number, livro: string) => void;
+  savingLivroRow: number | null;
   emptyLabel?: string;
 }) {
   return (
@@ -178,13 +252,13 @@ function DealsTableGrid({
         <table className="w-full table-fixed text-sm">
           <colgroup>
             <col className="w-[8%]" />
-            <col className="w-[10%]" />
             <col className="w-[13%]" />
-            <col className="w-[15%]" />
+            <col className="w-[13%]" />
+            <col className="w-[14%]" />
             <col className="w-[8%]" />
             <col className="w-[9%]" />
-            <col className="w-[10%]" />
-            <col className="w-[16%]" />
+            <col className="w-[9%]" />
+            <col className="w-[15%]" />
             <col className="w-[7%]" />
             <col className="w-[4%]" />
           </colgroup>
@@ -207,10 +281,25 @@ function DealsTableGrid({
               const isOk = d.simonato.toUpperCase() === "OK";
               const isSaving = savingRow === d.rowNumber;
               const hasError = errorRow === d.rowNumber;
+              const isSavingLivro = savingLivroRow === d.rowNumber;
               return (
                 <tr key={d.rowNumber} className="border-b border-border/60 align-top last:border-0">
                   <td className="break-words px-3 py-3 text-muted">{d.dataFechamento || "—"}</td>
-                  <td className="break-words px-3 py-3 text-muted">{d.livro || "—"}</td>
+                  <td className="px-3 py-3">
+                    <select
+                      value={d.livro || ""}
+                      disabled={isSavingLivro}
+                      onChange={(e) => onLivroChange(d.rowNumber, e.target.value)}
+                      className="w-full rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand-500 disabled:opacity-60"
+                    >
+                      <option value="">Selecionar...</option>
+                      {livroOptions.map((l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="break-words px-3 py-3 font-medium text-ink">{d.nomeCoautor}</td>
                   <td className="break-words px-3 py-3 text-muted">{d.entregaveis}</td>
                   <td className="break-words px-3 py-3 text-right tabular-nums">
