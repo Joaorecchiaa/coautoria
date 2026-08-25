@@ -24,11 +24,18 @@ async function pdFetch(path: string, params: Record<string, string> = {}) {
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
   const res = await fetch(url.toString(), { cache: "no-store" });
+  const raw = await res.text();
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Pipedrive API ${path} -> ${res.status}: ${body}`);
+    throw new Error(`Pipedrive API ${path} -> ${res.status}: ${raw}`);
   }
-  return res.json();
+  if (!raw) {
+    throw new Error(`Pipedrive API ${path} -> resposta vazia (possível timeout)`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`Pipedrive API ${path} -> resposta não é um JSON válido`);
+  }
 }
 
 // ---- dealFields: resolve rótulos de campos de opção única (Nome Produto, Bônus - Produto) ----
@@ -90,8 +97,9 @@ export async function searchWonCoautoriaDealIds(): Promise<number[]> {
   const ids = new Set<number>();
   let start = 0;
   const limit = 100;
+  const maxPages = 8; // trava de segurança: evita estourar o tempo da função
 
-  while (true) {
+  for (let page = 0; page < maxPages; page++) {
     const json = await pdFetch("/deals/search", {
       term: "COAUTORIA",
       status: "won",
@@ -104,7 +112,6 @@ export async function searchWonCoautoriaDealIds(): Promise<number[]> {
     const moreItems = json.additional_data?.pagination?.more_items_in_collection;
     if (!moreItems) break;
     start += limit;
-    if (start > 10000) break; // trava de segurança
   }
 
   return [...ids];
