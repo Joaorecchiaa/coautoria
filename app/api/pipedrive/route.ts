@@ -27,9 +27,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  let payload: any;
   try {
-    const payload = await request.json();
+    const raw = await request.text();
+    if (!raw) {
+      return NextResponse.json(
+        { error: "corpo da requisição vazio" },
+        { status: 400 }
+      );
+    }
+    payload = JSON.parse(raw);
+  } catch (err: any) {
+    console.error("Erro ao interpretar o corpo do webhook do Pipedrive:", err);
+    return NextResponse.json(
+      { error: "corpo da requisição não é um JSON válido" },
+      { status: 400 }
+    );
+  }
 
+  try {
     // Formato padrão dos webhooks do Pipedrive (v1): o negócio atualizado vem
     // em payload.current (ou payload.data, em versões mais novas do formato).
     // Também aceitamos o formato mais simples das Automations do Pipedrive
