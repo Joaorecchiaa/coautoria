@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { searchWonCoautoriaDealIds } from "@/lib/pipedrive";
-import { extractDealIdsFromSheet, processDealForSheet } from "@/lib/coautoria";
+import { extractDealIdsFromSheet, processWonDealsSince } from "@/lib/coautoria";
 import { appendRows, getSheetRows } from "@/lib/sheets";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-// Rede de segurança: roda uma vez por dia (via Vercel Cron, ver vercel.json) e
-// varre TODOS os negócios ganhos com "COAUTORIA" no Pipedrive, garantindo que
-// nada passou batido — mesmo que o webhook em tempo real (/api/webhook/pipedrive)
-// tenha falhado em algum momento.
+// Rede de segurança: roda uma vez por dia (via Vercel Cron, ver vercel.json).
+// Janela maior que o botão "Atualizar" (180 dias) só por segurança extra,
+// caso o webhook e os cliques manuais tenham falhado por um bom tempo — o
+// histórico mais antigo que isso já está garantido na planilha.
+const LOOKBACK_DAYS = 180;
+
 export async function GET(request: Request) {
   const expected = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
@@ -18,37 +19,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [existingRows, candidateIds] = await Promise.all([
-      getSheetRows(),
-      searchWonCoautoriaDealIds(),
-    ]);
+    const sinceISO = new Date(
+      Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
 
+    const existingRows = await getSheetRows();
     const existingIds = extractDealIdsFromSheet(existingRows);
-    const newRows: (string | number)[][] = [];
-    const skipped: Record<string, number[]> = {
-      not_coautoria: [],
-      not_won: [],
-      not_found: [],
-    };
-
-    for (const id of candidateIds) {
-      if (existingIds.has(id)) continue;
-      const result = await processDealForSheet(id, existingIds);
-      if (result.status === "added") {
-        newRows.push(result.row);
-      } else if (result.status !== "already_exists") {
-        skipped[result.status]?.push(id);
-      }
-    }
+    const { newRows, consideredCount } = await processWonDealsSince(
+      sinceISO,
+      existingIds
+    );
 
     if (newRows.length) {
       await appendRows(newRows);
     }
 
     return NextResponse.json({
-      candidatosEncontrados: candidateIds.length,
+      candidatosConsiderados: consideredCount,
       novosAdicionados: newRows.length,
-      ignorados: skipped,
+      janelaDias: LOOKBACK_DAYS,
     });
   } catch (err: any) {
     console.error("Erro na sincronização:", err);
