@@ -1,8 +1,12 @@
-// Integração com a API v1 do Pipedrive.
-// Documentação: https://developers.pipedrive.com/docs/api/v1
+// Integração com a API do Pipedrive (v1 para endpoints auxiliares e v2 para a
+// listagem de negócios, que suporta filtrar por data de atualização e já traz
+// os campos customizados junto — bem mais rápido que buscar por texto e
+// depois abrir negócio por negócio).
+// Documentação: https://developers.pipedrive.com/docs/api/v1 e /v2
 
 const PIPEDRIVE_DOMAIN = process.env.PIPEDRIVE_DOMAIN || "boardacademy";
 const BASE_URL = `https://${PIPEDRIVE_DOMAIN}.pipedrive.com/api/v1`;
+const BASE_URL_V2 = `https://${PIPEDRIVE_DOMAIN}.pipedrive.com/api/v2`;
 
 export const FIELD_KEYS = {
   nomeProduto: "09d57fd58b8cac693f5901417f758df746223273",
@@ -35,6 +39,26 @@ async function pdFetch(path: string, params: Record<string, string> = {}) {
     return JSON.parse(raw);
   } catch {
     throw new Error(`Pipedrive API ${path} -> resposta não é um JSON válido`);
+  }
+}
+
+async function pdFetchV2(path: string, params: Record<string, string> = {}) {
+  const url = new URL(BASE_URL_V2 + path);
+  url.searchParams.set("api_token", token());
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(`Pipedrive API v2 ${path} -> ${res.status}: ${raw}`);
+  }
+  if (!raw) {
+    throw new Error(`Pipedrive API v2 ${path} -> resposta vazia (possível timeout)`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`Pipedrive API v2 ${path} -> resposta não é um JSON válido`);
   }
 }
 
@@ -92,32 +116,51 @@ export async function getPipelineName(
   return pipelinesCache[String(pipelineId)] || String(pipelineId);
 }
 
-// ---- busca de negócios ganhos que citam COAUTORIA (candidatos) ----
-export async function searchWonCoautoriaDealIds(): Promise<number[]> {
-  const ids = new Set<number>();
-  let start = 0;
+// ---- negócios ganhos e atualizados desde uma data (candidatos recentes) ----
+// Usa a API v2, que permite filtrar por status + data de atualização e já
+// devolve os campos customizados junto — não precisamos mais buscar por texto
+// nem abrir negócio por negócio para checar se é coautoria. O histórico
+// antigo já está registrado na planilha, então só precisamos olhar o que
+// mudou desde `sinceISO` pra frente.
+export async function getWonDealsSince(
+  sinceISO: string
+): Promise<Record<string, any>[]> {
+  const deals: Record<string, any>[] = [];
   const limit = 100;
-  const maxPages = 8; // trava de segurança: evita estourar o tempo da função
+  const maxPages = 20; // trava de segurança
+  let cursor: string | undefined;
+
+  const customFieldKeys = [
+    FIELD_KEYS.nomeProduto,
+    FIELD_KEYS.bonusProduto,
+    FIELD_KEYS.celular,
+    FIELD_KEYS.email,
+    FIELD_KEYS.linkedin,
+  ].join(",");
 
   for (let page = 0; page < maxPages; page++) {
-    const json = await pdFetch("/deals/search", {
-      term: "COAUTORIA",
+    const params: Record<string, string> = {
       status: "won",
+      updated_since: sinceISO,
       limit: String(limit),
-      start: String(start),
-    });
-    const items = json.data?.items || [];
-    for (const it of items) ids.add(it.item.id);
+      custom_fields: customFieldKeys,
+      sort_by: "update_time",
+      sort_direction: "desc",
+    };
+    if (cursor) params.cursor = cursor;
 
-    const moreItems = json.additional_data?.pagination?.more_items_in_collection;
-    if (!moreItems) break;
-    start += limit;
+    const json = await pdFetchV2("/deals", params);
+    const items = json.data || [];
+    deals.push(...items);
+
+    cursor = json.additional_data?.next_cursor;
+    if (!cursor || items.length === 0) break;
   }
 
-  return [...ids];
+  return deals;
 }
 
-// ---- detalhe completo de um negócio ----
+// ---- detalhe completo de um único negócio (usado pelo webhook em tempo real) ----
 export async function getDealFull(id: number): Promise<Record<string, any> | null> {
   const json = await pdFetch(`/deals/${id}`);
   return json.data || null;
