@@ -32,8 +32,13 @@ export async function POST(request: Request) {
 
     // Formato padrão dos webhooks do Pipedrive (v1): o negócio atualizado vem
     // em payload.current (ou payload.data, em versões mais novas do formato).
+    // Também aceitamos o formato mais simples das Automations do Pipedrive
+    // (ação "Enviar solicitação de webhook" montada com o construtor de
+    // chave/valor), que manda só { "deal_id": 123 } no corpo.
     const deal = payload?.current || payload?.data || payload?.object;
-    const dealId = Number(deal?.id ?? payload?.meta?.id);
+    const dealId = Number(
+      deal?.id ?? payload?.meta?.id ?? payload?.deal_id ?? payload?.dealId
+    );
 
     if (!dealId) {
       return NextResponse.json({ error: "não encontrei o id do negócio no payload" }, {
