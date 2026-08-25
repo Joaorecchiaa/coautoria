@@ -15,7 +15,15 @@ function getAuth() {
       "Credenciais da conta de serviço do Google não configuradas (GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY)"
     );
   }
-  const key = rawKey.replace(/\\n/g, "\n");
+  let key = rawKey.trim();
+  // Remove aspas extras que às vezes sobram ao colar o valor no .env.local
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1);
+  }
+  key = key.replace(/\\n/g, "\n").trim();
   return new google.auth.JWT({
     email,
     key,
@@ -44,6 +52,18 @@ export async function getSheetRows(): Promise<SheetRow[]> {
     range: `${tabName()}!A2:O20000`,
   });
   return (res.data.values as SheetRow[]) || [];
+}
+
+// Marca a coluna C (SIMONATO) de uma linha específica como "OK".
+// rowNumber é o número da linha DENTRO da planilha (linha 2 = primeira venda).
+export async function markSimonatoOk(rowNumber: number) {
+  const sheets = sheetsClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: spreadsheetId(),
+    range: `${tabName()}!C${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [["OK"]] },
+  });
 }
 
 export async function appendRows(rows: (string | number)[][]) {
