@@ -1,14 +1,14 @@
 import { getSheetRows } from "@/lib/sheets";
-import { buildDashboardMetrics, formatBRL, parseDeals } from "@/lib/metrics";
+import { buildDashboardMetrics, buildLivroInsights, parseDeals } from "@/lib/metrics";
 import { StatCard } from "@/components/StatCard";
 import { RankingChart } from "@/components/RankingChart";
 import { TimelineChart } from "@/components/TimelineChart";
-import { DealsTable } from "@/components/DealsTable";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { DashboardNav } from "@/components/DashboardNav";
 
-export const revalidate = 300; // atualiza a página a cada 5 minutos
+export const revalidate = 300;
 
-export default async function DashboardPage() {
+export default async function InsightsPage() {
   let deals: ReturnType<typeof parseDeals> = [];
   let loadError: string | null = null;
 
@@ -20,10 +20,12 @@ export default async function DashboardPage() {
   }
 
   const metrics = buildDashboardMetrics(deals);
+  const livroInsights = buildLivroInsights(deals);
 
   return (
     <main>
       <DashboardHeader updatedAt={new Date()} />
+      <DashboardNav current="insights" />
 
       <div className="mx-auto max-w-[1600px] px-6 py-8">
         {loadError ? (
@@ -32,19 +34,25 @@ export default async function DashboardPage() {
           </div>
         ) : null}
 
-        <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="Total de vendas" value={String(metrics.totalCount)} />
-          <StatCard label="Valor total" value={formatBRL(metrics.totalValue)} />
+        <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <StatCard
-            label="Pendentes de double-check"
-            value={String(metrics.pendentesDoubleCheck)}
-            hint="Coluna SIMONATO ainda sem &quot;OK&quot;"
-            tone={metrics.pendentesDoubleCheck > 0 ? "warning" : "default"}
+            label="Livro com mais vendas"
+            value={livroInsights.livroMaisVendas?.livro || "—"}
+            hint={
+              livroInsights.livroMaisVendas
+                ? `${livroInsights.livroMaisVendas.count} venda(s)`
+                : "Nenhuma venda com livro definido ainda"
+            }
           />
-        </section>
-
-        <section className="mb-10">
-          <DealsTable deals={deals} />
+          <StatCard
+            label="Livro que vendeu mais rápido"
+            value={livroInsights.livroMaisRapido?.livro || "—"}
+            hint={
+              livroInsights.livroMaisRapido
+                ? `${livroInsights.livroMaisRapido.vendasPorDia!.toFixed(2)} venda(s) por dia, em média`
+                : "Precisa de pelo menos 2 vendas com data pra medir o ritmo"
+            }
+          />
         </section>
 
         <section className="mb-8">
