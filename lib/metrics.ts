@@ -83,8 +83,33 @@ export function formatMonthLabel(key: string): string {
   return `${MONTH_NAMES[idx] ?? month} de ${year}`;
 }
 
+// Remove sufixo de parcela do nome, tipo "1/2", "2 / 2", "1/3" etc — usado só
+// pra contar o total de vendas sem duplicar parcelas da mesma venda.
+function normalizeNomeBase(nome: string): string {
+  return nome
+    .replace(/\s*\d+\s*\/\s*\d+\s*$/, "")
+    .trim()
+    .toUpperCase();
+}
+
+// Conta vendas únicas: mesmo nome (sem o sufixo de parcela) + mesmo mês +
+// mesmo livro conta como 1 venda só (são parcelas da mesma venda). Nome igual
+// em mês ou livro diferente continua contando separado — pode ser o mesmo
+// cliente comprando outra coautoria. Usado só pro card "Total de vendas";
+// tabela, evolução mensal, por closer e por squad continuam linha por linha.
+function countUniqueSales(deals: Deal[]): number {
+  const seen = new Set<string>();
+  for (const d of deals) {
+    const key = `${normalizeNomeBase(d.nomeCoautor)}|${monthKeyOf(d) || ""}|${d.livro
+      .trim()
+      .toUpperCase()}`;
+    seen.add(key);
+  }
+  return seen.size;
+}
+
 export function buildDashboardMetrics(deals: Deal[]) {
-  const totalCount = deals.length;
+  const totalCount = countUniqueSales(deals);
   const totalValue = deals.reduce((acc, d) => acc + d.valor, 0);
   const pendentesDoubleCheck = deals.filter((d) => d.simonato.toUpperCase() !== "OK").length;
 
