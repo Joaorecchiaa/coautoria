@@ -17,9 +17,10 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
   const [savingRow, setSavingRow] = useState<number | null>(null);
   const [errorRow, setErrorRow] = useState<number | null>(null);
 
-  // Catálogo de livros cadastrados (coluna Q da planilha) — usado pra montar
-  // o dropdown de cada venda. Carrega uma vez ao abrir o dashboard.
-  const [livroCatalog, setLivroCatalog] = useState<string[]>([]);
+  // Catálogo de livros cadastrados (colunas Q/R da planilha: nome + vagas) —
+  // usado pra montar o dropdown de cada venda e o painel de vagas. Carrega
+  // uma vez ao abrir o dashboard.
+  const [livroCatalog, setLivroCatalog] = useState<{ nome: string; vagas: number | null }[]>([]);
   const [savingLivroRow, setSavingLivroRow] = useState<number | null>(null);
   const [cadastrandoLivro, setCadastrandoLivro] = useState(false);
 
@@ -31,7 +32,10 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
   }, []);
 
   const livroOptions = useMemo(() => {
-    const set = new Set([...livroCatalog, ...dealsState.map((d) => d.livro).filter(Boolean)]);
+    const set = new Set([
+      ...livroCatalog.map((l) => l.nome),
+      ...dealsState.map((d) => d.livro).filter(Boolean),
+    ]);
     return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [dealsState, livroCatalog]);
 
@@ -111,27 +115,68 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
   }
 
   async function cadastrarLivro() {
-    const nome = window.prompt("Nome do novo livro:");
-    if (!nome || !nome.trim()) return;
+    const nomeRaw = window.prompt("Nome do livro (novo, ou já existente pra ajustar as vagas):");
+    if (!nomeRaw || !nomeRaw.trim()) return;
+    const nome = nomeRaw.trim();
+
+    const vagasRaw = window.prompt(
+      `Quantas vagas o livro "${nome}" tem? (deixe em branco se não quiser controlar vagas)`
+    );
+    let vagas: number | null = null;
+    if (vagasRaw !== null && vagasRaw.trim() !== "") {
+      const parsed = Number(vagasRaw.trim());
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        window.alert("Número de vagas inválido — nada foi salvo.");
+        return;
+      }
+      vagas = parsed;
+    }
+
     setCadastrandoLivro(true);
     try {
       const res = await fetch("/api/livros", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: nome.trim() }),
+        body: JSON.stringify({ nome, vagas }),
       });
       if (!res.ok) throw new Error("falha ao cadastrar livro");
-      setLivroCatalog((prev) =>
-        prev.some((l) => l.toLowerCase() === nome.trim().toLowerCase())
-          ? prev
-          : [...prev, nome.trim()]
-      );
+      setLivroCatalog((prev) => {
+        const existing = prev.some((l) => l.nome.toLowerCase() === nome.toLowerCase());
+        if (existing) {
+          return prev.map((l) => (l.nome.toLowerCase() === nome.toLowerCase() ? { nome, vagas } : l));
+        }
+        return [...prev, { nome, vagas }];
+      });
     } catch {
       window.alert("Não consegui cadastrar o livro, tenta de novo.");
     } finally {
       setCadastrandoLivro(false);
     }
   }
+
+  // Painel de vagas: só aparece quando um livro específico está selecionado
+  // no filtro. "Preenchidas" conta TODAS as vendas com esse livro (não só as
+  // que passam pelos outros filtros), pra refletir a ocupação real.
+  const livroSelecionadoInfo = useMemo(() => {
+    if (!livroFilter) return null;
+    const catalogEntry = livroCatalog.find(
+      (l) => l.nome.toLowerCase() === livroFilter.toLowerCase()
+    );
+    const dealsDoLivro = dealsState.filter((d) => d.livro === livroFilter);
+    const preenchidas = dealsDoLivro.length;
+    const vagas = catalogEntry?.vagas ?? null;
+    const faltam = vagas !== null ? Math.max(0, vagas - preenchidas) : null;
+    const valorTotal = dealsDoLivro.reduce((acc, d) => acc + d.valor, 0);
+
+    const porCloserMap = new Map<string, number>();
+    for (const d of dealsDoLivro) {
+      const key = d.closer || "Sem closer";
+      porCloserMap.set(key, (porCloserMap.get(key) || 0) + 1);
+    }
+    const porCloser = [...porCloserMap.entries()].sort((a, b) => b[1] - a[1]);
+
+    return { vagas, preenchidas, faltam, valorTotal, porCloser };
+  }, [livroFilter, livroCatalog, dealsState]);
 
   return (
     <div className="space-y-6">
@@ -174,6 +219,48 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
           </label>
           <span className="ml-auto text-sm text-muted">{filtered.length} vendas</span>
         </div>
+
+        {livroSelecionadoInfo ? (
+          <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border pt-4">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted">Vagas</div>
+              <div className="text-lg font-semibold text-ink">
+                {livroSelecionadoInfo.vagas ?? "não definidas"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted">Preenchidas</div>
+              <div className="text-lg font-semibold text-ink">{livroSelecionadoInfo.preenchidas}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted">Faltam</div>
+              <div className="text-lg font-semibold text-ink">
+                {livroSelecionadoInfo.faltam ?? "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted">Valor total</div>
+              <div className="text-lg font-semibold text-ink">
+                {formatBRL(livroSelecionadoInfo.valorTotal)}
+              </div>
+            </div>
+            {livroSelecionadoInfo.porCloser.length > 0 ? (
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted">Por closer</div>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {livroSelecionadoInfo.porCloser.map(([closer, count]) => (
+                    <span
+                      key={closer}
+                      className="rounded-full bg-brand-500/10 px-2.5 py-1 text-xs font-medium text-brand-700"
+                    >
+                      {closer} ({count})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div>
