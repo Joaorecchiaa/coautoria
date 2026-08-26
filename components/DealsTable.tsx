@@ -16,6 +16,18 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
   const [onlyPendentes, setOnlyPendentes] = useState(false);
   const [savingRow, setSavingRow] = useState<number | null>(null);
   const [errorRow, setErrorRow] = useState<number | null>(null);
+  const [copiedCell, setCopiedCell] = useState<string | null>(null);
+
+  // Vindo do card "Pendentes de double-check" no topo do dashboard
+  // (?pendentes=1) — já abre a tabela filtrada, sem precisar marcar o
+  // checkbox manualmente.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("pendentes") === "1") {
+      setOnlyPendentes(true);
+    }
+  }, []);
 
   // Catálogo de livros cadastrados (colunas Q/R da planilha: nome + vagas) —
   // usado pra montar o dropdown de cada venda e o painel de vagas. Carrega
@@ -116,6 +128,18 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
     } finally {
       setSavingLivroRow(null);
     }
+  }
+
+  function handleCopy(rowNumber: number, field: string, value: string) {
+    if (!value) return;
+    const key = `${rowNumber}-${field}`;
+    navigator.clipboard
+      ?.writeText(value)
+      .then(() => {
+        setCopiedCell(key);
+        setTimeout(() => setCopiedCell((cur) => (cur === key ? null : cur)), 1500);
+      })
+      .catch(() => {});
   }
 
   async function cadastrarLivro() {
@@ -279,6 +303,8 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
           livroOptions={livroOptions}
           onLivroChange={updateLivro}
           savingLivroRow={savingLivroRow}
+          copiedCell={copiedCell}
+          onCopy={handleCopy}
           emptyLabel="Nenhuma venda fechada este mês ainda."
         />
       </div>
@@ -312,6 +338,8 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
                     livroOptions={livroOptions}
                     onLivroChange={updateLivro}
                     savingLivroRow={savingLivroRow}
+                    copiedCell={copiedCell}
+                    onCopy={handleCopy}
                   />
                 </div>
               </details>
@@ -331,6 +359,8 @@ function DealsTableGrid({
   livroOptions,
   onLivroChange,
   savingLivroRow,
+  copiedCell,
+  onCopy,
   emptyLabel = "Nenhuma venda encontrada.",
 }: {
   deals: Deal[];
@@ -340,6 +370,8 @@ function DealsTableGrid({
   livroOptions: string[];
   onLivroChange: (rowNumber: number, livro: string) => void;
   savingLivroRow: number | null;
+  copiedCell: string | null;
+  onCopy: (rowNumber: number, field: string, value: string) => void;
   emptyLabel?: string;
 }) {
   return (
@@ -396,7 +428,17 @@ function DealsTableGrid({
                       ))}
                     </select>
                   </td>
-                  <td className="break-words px-3 py-3 font-medium text-ink">{d.nomeCoautor}</td>
+                  <td
+                    onClick={() => onCopy(d.rowNumber, "nome", d.nomeCoautor)}
+                    title="Clique para copiar o nome"
+                    className="cursor-pointer break-words px-3 py-3 font-medium text-ink hover:text-brand-600"
+                  >
+                    {copiedCell === `${d.rowNumber}-nome` ? (
+                      <span className="text-accent-teal">Copiado!</span>
+                    ) : (
+                      d.nomeCoautor
+                    )}
+                  </td>
                   <td className="break-words px-3 py-3 text-muted">{d.entregaveis}</td>
                   <td className="break-words px-3 py-3 text-right tabular-nums">
                     {formatBRL(d.valor)}
@@ -411,19 +453,32 @@ function DealsTableGrid({
                         </a>
                       ) : null}
                       {d.email ? (
-                        <a href={`mailto:${d.email}`} className="truncate hover:text-ink">
-                          {d.email}
-                        </a>
+                        <button
+                          type="button"
+                          onClick={() => onCopy(d.rowNumber, "email", d.email)}
+                          title="Clique para copiar o e-mail"
+                          className="truncate text-left hover:text-ink"
+                        >
+                          {copiedCell === `${d.rowNumber}-email` ? (
+                            <span className="text-accent-teal">Copiado!</span>
+                          ) : (
+                            d.email
+                          )}
+                        </button>
                       ) : null}
                       {d.linkedin ? (
-                        <a
-                          href={d.linkedin.startsWith("http") ? d.linkedin : `https://${d.linkedin}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="truncate text-brand-600 hover:text-brand-700"
+                        <button
+                          type="button"
+                          onClick={() => onCopy(d.rowNumber, "linkedin", d.linkedin)}
+                          title="Clique para copiar o link do LinkedIn"
+                          className="truncate text-left text-brand-600 hover:text-brand-700"
                         >
-                          LinkedIn
-                        </a>
+                          {copiedCell === `${d.rowNumber}-linkedin` ? (
+                            <span className="text-accent-teal">Copiado!</span>
+                          ) : (
+                            "LinkedIn"
+                          )}
+                        </button>
                       ) : null}
                       {!d.celular && !d.email && !d.linkedin ? "—" : null}
                     </div>
