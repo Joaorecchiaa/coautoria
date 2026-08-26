@@ -62,6 +62,10 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
     return [...list].sort((a, b) => (b.dataFechamento || "").localeCompare(a.dataFechamento || ""));
   }, [dealsState, query, livroFilter, onlyPendentes]);
 
+  // Quando algum filtro está ativo (livro, pendentes de double-check, ou
+  // busca de texto), os grupos de meses no histórico já abrem sozinhos.
+  const hasActiveFilter = Boolean(query.trim() || livroFilter || onlyPendentes);
+
   const thisMonth = currentMonthKey();
   const currentMonthDeals = filtered.filter((d) => monthKeyOf(d) === thisMonth);
   const historyGroups = useMemo(() => {
@@ -287,7 +291,12 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
           <div className="space-y-3">
             {historyGroups.map(([key, groupDeals]) => (
               <details
-                key={key}
+                // A key inclui se há filtro ativo: assim, ao filtrar por
+                // livro, por pendentes de double-check ou por texto, cada
+                // grupo de mês é remontado já aberto — sem precisar clicar
+                // em cada mês pra ver se tem resultado.
+                key={`${key}-${hasActiveFilter}`}
+                open={hasActiveFilter}
                 className="group rounded-xl2 border border-border bg-card shadow-card"
               >
                 <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3 text-sm font-medium text-ink">
