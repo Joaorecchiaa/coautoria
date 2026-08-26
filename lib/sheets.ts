@@ -90,29 +90,60 @@ export async function setLivro(rowNumber: number, livro: string) {
   });
 }
 
-// Catálogo de livros cadastrados: guardado na coluna Q da mesma aba (mesma
-// planilha, sem precisar de uma segunda aba), separado da coluna B (que
-// guarda o livro de cada venda). Assim dá pra cadastrar um livro novo mesmo
-// antes de vinculá-lo a alguma venda.
-const LIVROS_COL = "Q";
+// Catálogo de livros cadastrados: guardado nas colunas Q (nome) e R (vagas)
+// da mesma aba (mesma planilha, sem precisar de uma segunda aba), separado da
+// coluna B (que guarda o livro de cada venda). Assim dá pra cadastrar um
+// livro novo — com o número de vagas dele — mesmo antes de vinculá-lo a
+// alguma venda. Livros antigos que nunca tiveram vagas definidas ficam com
+// vagas = null (não controlamos capacidade deles).
+const LIVROS_COL_NOME = "Q";
+const LIVROS_COL_VAGAS = "R";
 
-export async function getLivrosCatalog(): Promise<string[]> {
+export type LivroCatalogEntry = {
+  nome: string;
+  vagas: number | null;
+  rowNumber: number; // linha dentro da planilha, pra permitir atualizar depois
+};
+
+export async function getLivrosCatalog(): Promise<LivroCatalogEntry[]> {
   const sheets = sheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: spreadsheetId(),
-    range: `${tabName()}!${LIVROS_COL}2:${LIVROS_COL}2000`,
+    range: `${tabName()}!${LIVROS_COL_NOME}2:${LIVROS_COL_VAGAS}2000`,
   });
   const values = (res.data.values as string[][]) || [];
-  return values.map((r) => (r[0] || "").trim()).filter(Boolean);
+  return values
+    .map((r, i) => {
+      const vagasRaw = (r[1] || "").trim();
+      const vagas = vagasRaw !== "" && !Number.isNaN(Number(vagasRaw)) ? Number(vagasRaw) : null;
+      return { nome: (r[0] || "").trim(), vagas, rowNumber: i + 2 };
+    })
+    .filter((e) => e.nome);
 }
 
-export async function addLivroToCatalog(nome: string) {
+// Cria o livro no catálogo, ou atualiza o número de vagas se ele já existir
+// (comparação sem diferenciar maiúsculas/minúsculas).
+export async function upsertLivroCatalog(nome: string, vagas: number | null) {
+  const catalog = await getLivrosCatalog();
+  const existing = catalog.find((e) => e.nome.toLowerCase() === nome.toLowerCase());
   const sheets = sheetsClient();
+
+  if (existing) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: spreadsheetId(),
+      range: `${tabName()}!${LIVROS_COL_NOME}${existing.rowNumber}:${LIVROS_COL_VAGAS}${existing.rowNumber}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [[nome, vagas ?? ""]] },
+    });
+    return { atualizado: true };
+  }
+
   await sheets.spreadsheets.values.append({
     spreadsheetId: spreadsheetId(),
-    range: `${tabName()}!${LIVROS_COL}2:${LIVROS_COL}`,
+    range: `${tabName()}!${LIVROS_COL_NOME}2:${LIVROS_COL_VAGAS}`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [[nome]] },
+    requestBody: { values: [[nome, vagas ?? ""]] },
   });
+  return { atualizado: false };
 }
