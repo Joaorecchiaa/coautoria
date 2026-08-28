@@ -33,8 +33,19 @@ function formatMonth(m: string) {
   return `${names[idx] ?? month}/${year.slice(2)}`;
 }
 
-export function TimelineChart({ data }: { data: Row[] }) {
+// metric="value" (padrão): mostra o valor vendido em R$ por mês.
+// metric="count": mostra a quantidade de vendas por mês, em números inteiros
+// (1, 2, 3...), sem formatar como dinheiro.
+export function TimelineChart({
+  data,
+  metric = "value",
+}: {
+  data: Row[];
+  metric?: "value" | "count";
+}) {
   const formatted = data.map((d) => ({ ...d, label: formatMonth(d.month) }));
+  const dataKey = metric === "count" ? "count" : "value";
+  const color = metric === "count" ? "#0f9d8c" : "#3d6dfb";
 
   return (
     <ResponsiveContainer width="100%" height={280}>
@@ -48,10 +59,11 @@ export function TimelineChart({ data }: { data: Row[] }) {
         />
         <YAxis
           tick={{ fontSize: 12, fill: "#6b7280" }}
-          tickFormatter={(v) => formatBRL(v)}
+          tickFormatter={metric === "count" ? (v) => String(v) : (v) => formatBRL(v)}
+          allowDecimals={metric !== "count"}
           axisLine={{ stroke: "#e4e7ec" }}
           tickLine={false}
-          width={80}
+          width={metric === "count" ? 40 : 80}
         />
         <Tooltip
           formatter={(v: number, name) =>
@@ -64,7 +76,7 @@ export function TimelineChart({ data }: { data: Row[] }) {
             fontSize: 13,
           }}
         />
-        <Bar dataKey="value" fill="#3d6dfb" radius={[4, 4, 0, 0]} maxBarSize={36} />
+        <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} maxBarSize={36} />
       </BarChart>
     </ResponsiveContainer>
   );
