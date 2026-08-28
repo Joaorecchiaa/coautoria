@@ -33,6 +33,23 @@ function ownerName(deal: Record<string, any>): Promise<string> | string {
   return "";
 }
 
+// Decide se o negócio é uma venda de coautoria olhando os três campos que
+// podem conter isso — "Nome Produto", "Bônus - Produto" e "Produto" — e
+// escolhe qual texto usar como Entregável: o primeiro desses três campos
+// que realmente contiver "COAUTORIA" (nessa ordem de prioridade).
+function resolveCoautoria(labels: {
+  nomeProduto: string;
+  bonusProduto: string;
+  produto: string;
+}): { isCoautoria: boolean; entregavelLabel: string } {
+  const candidates = [labels.nomeProduto, labels.produto, labels.bonusProduto];
+  const match = candidates.find((label) => label.toUpperCase().includes("COAUTORIA"));
+  return {
+    isCoautoria: Boolean(match),
+    entregavelLabel: match || labels.nomeProduto || labels.produto || labels.bonusProduto,
+  };
+}
+
 function buildRow(
   dealId: number,
   deal: Record<string, any>,
@@ -91,21 +108,26 @@ export async function processDealForSheet(
   const optionMaps = await getDealFieldOptionMaps();
   const nomeProdutoMap = optionMaps[FIELD_KEYS.nomeProduto];
   const bonusProdutoMap = optionMaps[FIELD_KEYS.bonusProduto];
+  const produtoMap = optionMaps[FIELD_KEYS.produto];
 
   const nomeProdutoLabel = labelFor(nomeProdutoMap, deal[FIELD_KEYS.nomeProduto]);
   const bonusProdutoLabel = labelFor(bonusProdutoMap, deal[FIELD_KEYS.bonusProduto]);
+  const produtoLabel = labelFor(produtoMap, deal[FIELD_KEYS.produto]);
 
-  const temCoautoriaNome = nomeProdutoLabel.toUpperCase().includes("COAUTORIA");
-  const temCoautoriaBonus = bonusProdutoLabel.toUpperCase().includes("COAUTORIA");
+  const { isCoautoria, entregavelLabel } = resolveCoautoria({
+    nomeProduto: nomeProdutoLabel,
+    bonusProduto: bonusProdutoLabel,
+    produto: produtoLabel,
+  });
 
-  if (!temCoautoriaNome && !temCoautoriaBonus) {
+  if (!isCoautoria) {
     return { status: "not_coautoria" };
   }
 
   const closer = await ownerName(deal);
   const squad = deal.pipeline_id ? await getPipelineName(deal.pipeline_id) : "";
 
-  const row = buildRow(dealId, deal, nomeProdutoLabel, closer, squad, deal);
+  const row = buildRow(dealId, deal, entregavelLabel, closer, squad, deal);
 
   return { status: "added", row };
 }
@@ -127,20 +149,25 @@ export async function processWonDealsSince(
   const optionMaps = await getDealFieldOptionMaps();
   const nomeProdutoMap = optionMaps[FIELD_KEYS.nomeProduto];
   const bonusProdutoMap = optionMaps[FIELD_KEYS.bonusProduto];
+  const produtoMap = optionMaps[FIELD_KEYS.produto];
 
   const rows = await mapWithConcurrency(candidates, 6, async (deal) => {
     const customFields = deal.custom_fields || {};
     const nomeProdutoLabel = labelFor(nomeProdutoMap, customFields[FIELD_KEYS.nomeProduto]);
     const bonusProdutoLabel = labelFor(bonusProdutoMap, customFields[FIELD_KEYS.bonusProduto]);
+    const produtoLabel = labelFor(produtoMap, customFields[FIELD_KEYS.produto]);
 
-    const temCoautoriaNome = nomeProdutoLabel.toUpperCase().includes("COAUTORIA");
-    const temCoautoriaBonus = bonusProdutoLabel.toUpperCase().includes("COAUTORIA");
-    if (!temCoautoriaNome && !temCoautoriaBonus) return null;
+    const { isCoautoria, entregavelLabel } = resolveCoautoria({
+      nomeProduto: nomeProdutoLabel,
+      bonusProduto: bonusProdutoLabel,
+      produto: produtoLabel,
+    });
+    if (!isCoautoria) return null;
 
     const closer = await ownerName(deal);
     const squad = deal.pipeline_id ? await getPipelineName(deal.pipeline_id) : "";
 
-    return buildRow(deal.id, deal, nomeProdutoLabel, closer, squad, customFields);
+    return buildRow(deal.id, deal, entregavelLabel, closer, squad, customFields);
   });
 
   return {
