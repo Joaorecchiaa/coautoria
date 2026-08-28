@@ -82,13 +82,37 @@ export async function getDealFieldOptionMaps() {
   return map;
 }
 
+// Alguns campos do Pipedrive (como "Produto") são de múltipla escolha — o
+// valor bruto vem como uma lista de ids (array ou string separada por
+// vírgula), tipo um negócio com "BOARD PRO PFIC" + "COAUTORIA" selecionados
+// juntos. Sem tratar isso, cada opção ficava sem resolver e a palavra
+// "COAUTORIA" nunca aparecia no texto final. Aqui resolve cada id pro seu
+// rótulo e junta tudo com " + ", igual o Pipedrive mostra na tela.
 export function labelFor(
   map: Record<string, string> | undefined,
   value: unknown
 ): string {
   if (value === null || value === undefined || value === "") return "";
-  if (map && map[String(value)]) return map[String(value)];
-  return String(value);
+
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => (map && map[String(v)]) || String(v))
+      .filter(Boolean)
+      .join(" + ");
+  }
+
+  const raw = String(value);
+  if (raw.includes(",")) {
+    return raw
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .map((v) => (map && map[v]) || v)
+      .join(" + ");
+  }
+
+  if (map && map[raw]) return map[raw];
+  return raw;
 }
 
 // ---- usuários (closers) ----
