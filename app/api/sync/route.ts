@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
     const existingRows = await getSheetRows();
     const existingIds = extractDealIdsFromSheet(existingRows);
-    const { newRows, consideredCount } = await processWonDealsSince(
+    const { newRows, consideredCount, titleUpdates } = await processWonDealsSince(
       sinceISO,
       existingIds
     );
@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       candidatosConsiderados: consideredCount,
       novosAdicionados: newRows.length,
+      titulosAtualizados: titleUpdates,
       janelaDias: LOOKBACK_DAYS,
     });
   } catch (err: any) {
