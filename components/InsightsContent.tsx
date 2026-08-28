@@ -100,10 +100,19 @@ export function InsightsContent({ deals }: { deals: Deal[] }) {
 
       <section className="mb-8">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
-          Evolução mensal
+          Evolução mensal (valor)
         </h2>
         <div className="rounded-xl2 border border-border bg-card p-5 shadow-card">
-          <TimelineChart data={metrics.byMonth} />
+          <TimelineChart data={metrics.byMonth} metric="value" />
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
+          Quantidade de vendas por mês
+        </h2>
+        <div className="rounded-xl2 border border-border bg-card p-5 shadow-card">
+          <TimelineChart data={metrics.byMonth} metric="count" />
         </div>
       </section>
 
