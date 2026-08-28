@@ -79,6 +79,19 @@ export async function appendRows(rows: (string | number)[][]) {
   });
 }
 
+// Define o valor da coluna D (NOME COAUTOR) de uma venda específica — usado
+// pra manter o título do negócio sincronizado quando ele é editado no
+// Pipedrive depois que a venda já entrou na planilha.
+export async function setNomeCoautor(rowNumber: number, nome: string) {
+  const sheets = sheetsClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: spreadsheetId(),
+    range: `${tabName()}!D${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[nome]] },
+  });
+}
+
 // Define o valor da coluna B (LIVRO) de uma venda específica.
 export async function setLivro(rowNumber: number, livro: string) {
   const sheets = sheetsClient();
