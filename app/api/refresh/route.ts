@@ -25,7 +25,7 @@ export async function POST() {
 
     const existingRows = await getSheetRows();
     const existingIds = extractDealIdsFromSheet(existingRows);
-    const { newRows, consideredCount } = await processWonDealsSince(
+    const { newRows, consideredCount, titleUpdates } = await processWonDealsSince(
       sinceISO,
       existingIds
     );
@@ -39,6 +39,7 @@ export async function POST() {
     return NextResponse.json({
       candidatosConsiderados: consideredCount,
       novosAdicionados: newRows.length,
+      titulosAtualizados: titleUpdates,
       janelaDias: LOOKBACK_DAYS,
     });
   } catch (err: any) {
