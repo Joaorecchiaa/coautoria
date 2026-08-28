@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -76,7 +77,14 @@ export function TimelineChart({
             fontSize: 13,
           }}
         />
-        <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} maxBarSize={36} />
+        <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} maxBarSize={36}>
+          <LabelList
+            dataKey="count"
+            position="top"
+            formatter={(v: number) => String(v)}
+            style={{ fontSize: 12, fontWeight: 600, fill: "#374151" }}
+          />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
