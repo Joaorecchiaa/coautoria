@@ -13,17 +13,23 @@ import {
   getWonDealsSince,
   labelFor,
 } from "./pipedrive";
+import { setNomeCoautor } from "./sheets";
 import { mapWithConcurrency } from "./concurrency";
 
-export function extractDealIdsFromSheet(rows: string[][]): Set<number> {
-  const ids = new Set<number>();
-  for (const row of rows) {
+export type ExistingDealInfo = { rowNumber: number; nomeAtual: string };
+
+// Mapeia deal_id -> {linha na planilha, nome salvo atualmente}, lendo o link
+// do Pipedrive na coluna H (Pipe) e o texto da coluna D (Nome Coautor).
+export function extractDealIdsFromSheet(rows: string[][]): Map<number, ExistingDealInfo> {
+  const map = new Map<number, ExistingDealInfo>();
+  rows.forEach((row, i) => {
     const pipe = row[7] || ""; // coluna H
-    for (const m of String(pipe).matchAll(/\/deal\/(\d+)/g)) {
-      ids.add(Number(m[1]));
+    const m = String(pipe).match(/\/deal\/(\d+)/);
+    if (m) {
+      map.set(Number(m[1]), { rowNumber: i + 2, nomeAtual: (row[3] || "").trim() });
     }
-  }
-  return ids;
+  });
+  return map;
 }
 
 function ownerName(deal: Record<string, any>): Promise<string> | string {
@@ -36,7 +42,9 @@ function ownerName(deal: Record<string, any>): Promise<string> | string {
 // Decide se o negócio é uma venda de coautoria olhando os três campos que
 // podem conter isso — "Nome Produto", "Bônus - Produto" e "Produto" — e
 // escolhe qual texto usar como Entregável: o primeiro desses três campos
-// que realmente contiver "COAUTORIA" (nessa ordem de prioridade).
+// que realmente contiver "COAUTORIA" (nessa ordem de prioridade). Cada label
+// já vem com múltiplas opções resolvidas (ex.: "BOARD PRO PFIC + COAUTORIA"),
+// graças ao labelFor tratar campos de múltipla escolha.
 function resolveCoautoria(labels: {
   nomeProduto: string;
   bonusProduto: string;
@@ -81,6 +89,7 @@ function buildRow(
 export type ProcessResult =
   | { status: "added"; row: (string | number)[] }
   | { status: "already_exists" }
+  | { status: "title_updated" }
   | { status: "not_won" }
   | { status: "not_coautoria" }
   | { status: "not_found" };
@@ -88,18 +97,26 @@ export type ProcessResult =
 /**
  * Processa um único negócio do Pipedrive pelo ID (busca o detalhe completo).
  * Usado pelo webhook em tempo real, que já sabe exatamente qual negócio
- * mudou de status.
+ * mudou de status. Se o negócio já está na planilha, aproveita pra conferir
+ * se o título mudou no Pipedrive e atualizar a coluna Nome Coautor.
  */
 export async function processDealForSheet(
   dealId: number,
-  existingIds: Set<number>
+  existingIds: Map<number, ExistingDealInfo>
 ): Promise<ProcessResult> {
-  if (existingIds.has(dealId)) {
-    return { status: "already_exists" };
-  }
+  const existing = existingIds.get(dealId);
 
   const deal = await getDealFull(dealId);
   if (!deal) return { status: "not_found" };
+
+  if (existing) {
+    const novoTitulo = (deal.title || "").trim();
+    if (novoTitulo && novoTitulo !== existing.nomeAtual) {
+      await setNomeCoautor(existing.rowNumber, novoTitulo);
+      return { status: "title_updated" };
+    }
+    return { status: "already_exists" };
+  }
 
   if (deal.status !== "won") {
     return { status: "not_won" };
@@ -135,23 +152,25 @@ export async function processDealForSheet(
 /**
  * Busca todos os negócios ganhos e atualizados desde `sinceISO` (API v2, já
  * com os campos customizados inclusos) e retorna as linhas prontas para
- * adicionar à planilha. Bem mais rápido que checar negócio por negócio,
- * porque não depende de busca por texto nem de uma chamada extra por
- * candidato.
+ * adicionar à planilha. Negócios que já estão na planilha, mas reaparecem
+ * aqui porque foram atualizados (ex.: título editado), têm a coluna Nome
+ * Coautor sincronizada em vez de serem simplesmente ignorados.
  */
 export async function processWonDealsSince(
   sinceISO: string,
-  existingIds: Set<number>
-): Promise<{ newRows: (string | number)[][]; consideredCount: number }> {
+  existingIds: Map<number, ExistingDealInfo>
+): Promise<{ newRows: (string | number)[][]; consideredCount: number; titleUpdates: number }> {
   const deals = await getWonDealsSince(sinceISO);
-  const candidates = deals.filter((d) => !existingIds.has(d.id));
+
+  const newCandidates = deals.filter((d) => !existingIds.has(d.id));
+  const existingCandidates = deals.filter((d) => existingIds.has(d.id));
 
   const optionMaps = await getDealFieldOptionMaps();
   const nomeProdutoMap = optionMaps[FIELD_KEYS.nomeProduto];
   const bonusProdutoMap = optionMaps[FIELD_KEYS.bonusProduto];
   const produtoMap = optionMaps[FIELD_KEYS.produto];
 
-  const rows = await mapWithConcurrency(candidates, 6, async (deal) => {
+  const rows = await mapWithConcurrency(newCandidates, 6, async (deal) => {
     const customFields = deal.custom_fields || {};
     const nomeProdutoLabel = labelFor(nomeProdutoMap, customFields[FIELD_KEYS.nomeProduto]);
     const bonusProdutoLabel = labelFor(bonusProdutoMap, customFields[FIELD_KEYS.bonusProduto]);
@@ -170,8 +189,19 @@ export async function processWonDealsSince(
     return buildRow(deal.id, deal, entregavelLabel, closer, squad, customFields);
   });
 
+  let titleUpdates = 0;
+  await mapWithConcurrency(existingCandidates, 6, async (deal) => {
+    const existing = existingIds.get(deal.id)!;
+    const novoTitulo = (deal.title || "").trim();
+    if (novoTitulo && novoTitulo !== existing.nomeAtual) {
+      await setNomeCoautor(existing.rowNumber, novoTitulo);
+      titleUpdates++;
+    }
+  });
+
   return {
     newRows: rows.filter((r): r is (string | number)[] => Boolean(r)),
-    consideredCount: candidates.length,
+    consideredCount: newCandidates.length,
+    titleUpdates,
   };
 }
