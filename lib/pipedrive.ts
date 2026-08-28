@@ -11,6 +11,7 @@ const BASE_URL_V2 = `https://${PIPEDRIVE_DOMAIN}.pipedrive.com/api/v2`;
 export const FIELD_KEYS = {
   nomeProduto: "09d57fd58b8cac693f5901417f758df746223273",
   bonusProduto: "de3ea26cf28b5d9505dcf5b02792ec09699314fc",
+  produto: "8bdce76ba66f0fed0280918a4845190c92899ed5",
   celular: "499d03669b5da808d338baae6fb730c5a3a41b01",
   email: "78446a38c20aa964be3dcda509189d8a8f28b41e",
   linkedin: "1453c308865745ef64745f7413132f009a5c9428",
@@ -140,6 +141,7 @@ export async function getWonDealsSince(
   const customFieldKeys = [
     FIELD_KEYS.nomeProduto,
     FIELD_KEYS.bonusProduto,
+    FIELD_KEYS.produto,
     FIELD_KEYS.celular,
     FIELD_KEYS.email,
     FIELD_KEYS.linkedin,
