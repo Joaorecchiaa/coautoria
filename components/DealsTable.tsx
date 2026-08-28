@@ -9,7 +9,16 @@ function currentMonthKey(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function DealsTable({ deals }: { deals: Deal[] }) {
+export function DealsTable({
+  deals,
+  pendentesSignal,
+}: {
+  deals: Deal[];
+  // Muda de valor (incrementa) toda vez que o card "Pendentes de
+  // double-check" é clicado — inclusive clicando de novo com o filtro já
+  // ativo — ativando exatamente o mesmo filtro do checkbox abaixo.
+  pendentesSignal?: number;
+}) {
   const [dealsState, setDealsState] = useState(deals);
   const [query, setQuery] = useState("");
   const [livroFilter, setLivroFilter] = useState("");
@@ -18,16 +27,12 @@ export function DealsTable({ deals }: { deals: Deal[] }) {
   const [errorRow, setErrorRow] = useState<number | null>(null);
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
 
-  // Vindo do card "Pendentes de double-check" no topo do dashboard
-  // (?pendentes=1) — já abre a tabela filtrada, sem precisar marcar o
-  // checkbox manualmente.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("pendentes") === "1") {
+    if (pendentesSignal) {
       setOnlyPendentes(true);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendentesSignal]);
 
   // Catálogo de livros cadastrados (colunas Q/R da planilha: nome + vagas) —
   // usado pra montar o dropdown de cada venda e o painel de vagas. Carrega
@@ -448,9 +453,18 @@ function DealsTableGrid({
                   <td className="break-words px-3 py-3 text-muted">
                     <div className="flex flex-col gap-0.5">
                       {d.celular ? (
-                        <a href={`tel:${d.celular}`} className="truncate hover:text-ink">
-                          {d.celular}
-                        </a>
+                        <button
+                          type="button"
+                          onClick={() => onCopy(d.rowNumber, "celular", d.celular)}
+                          title="Clique para copiar o celular"
+                          className="truncate text-left hover:text-ink"
+                        >
+                          {copiedCell === `${d.rowNumber}-celular` ? (
+                            <span className="text-accent-teal">Copiado!</span>
+                          ) : (
+                            d.celular
+                          )}
+                        </button>
                       ) : null}
                       {d.email ? (
                         <button
@@ -467,18 +481,15 @@ function DealsTableGrid({
                         </button>
                       ) : null}
                       {d.linkedin ? (
-                        <button
-                          type="button"
-                          onClick={() => onCopy(d.rowNumber, "linkedin", d.linkedin)}
-                          title="Clique para copiar o link do LinkedIn"
-                          className="truncate text-left text-brand-600 hover:text-brand-700"
+                        <a
+                          href={d.linkedin.startsWith("http") ? d.linkedin : `https://${d.linkedin}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Abrir LinkedIn em nova guia"
+                          className="truncate text-brand-600 hover:text-brand-700"
                         >
-                          {copiedCell === `${d.rowNumber}-linkedin` ? (
-                            <span className="text-accent-teal">Copiado!</span>
-                          ) : (
-                            "LinkedIn"
-                          )}
-                        </button>
+                          LinkedIn
+                        </a>
                       ) : null}
                       {!d.celular && !d.email && !d.linkedin ? "—" : null}
                     </div>
