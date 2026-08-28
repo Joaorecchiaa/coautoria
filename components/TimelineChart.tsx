@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -32,6 +31,31 @@ function formatMonth(m: string) {
   ];
   const idx = Number(month) - 1;
   return `${names[idx] ?? month}/${year.slice(2)}`;
+}
+
+// Tooltip customizado: mostra o mês, o valor em R$ e o número de vendas,
+// tudo dentro do mesmo quadradinho — independente de qual métrica está
+// sendo exibida nas barras.
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload || !payload.length) return null;
+  const row = payload[0].payload as Row & { label: string };
+  return (
+    <div
+      style={{
+        borderRadius: 8,
+        border: "1px solid #e4e7ec",
+        background: "#fff",
+        padding: "8px 12px",
+        fontSize: 13,
+      }}
+    >
+      <div style={{ color: "#111827", fontWeight: 500 }}>Mês: {label}</div>
+      <div style={{ color: "#3d6dfb" }}>Valor: {formatBRL(row.value)}</div>
+      <div style={{ color: "#0f9d8c" }}>
+        Vendas: {row.count} venda{row.count === 1 ? "" : "s"}
+      </div>
+    </div>
+  );
 }
 
 // metric="value" (padrão): mostra o valor vendido em R$ por mês.
@@ -66,25 +90,8 @@ export function TimelineChart({
           tickLine={false}
           width={metric === "count" ? 40 : 80}
         />
-        <Tooltip
-          formatter={(v: number, name) =>
-            name === "value" ? formatBRL(v) : `${v} venda(s)`
-          }
-          labelFormatter={(l) => `Mês: ${l}`}
-          contentStyle={{
-            borderRadius: 8,
-            border: "1px solid #e4e7ec",
-            fontSize: 13,
-          }}
-        />
-        <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} maxBarSize={36}>
-          <LabelList
-            dataKey="count"
-            position="top"
-            formatter={(v: number) => String(v)}
-            style={{ fontSize: 12, fontWeight: 600, fill: "#374151" }}
-          />
-        </Bar>
+        <Tooltip content={<CustomTooltip />} />
+        <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} maxBarSize={36} />
       </BarChart>
     </ResponsiveContainer>
   );
