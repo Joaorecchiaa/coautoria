@@ -27,10 +27,13 @@ export function InsightsContent({ deals }: { deals: Deal[] }) {
 
   const [livroFilter, setLivroFilter] = useState("");
 
-  const filteredDeals = useMemo(
-    () => (livroFilter ? deals.filter((d) => d.livro === livroFilter) : deals),
-    [deals, livroFilter]
-  );
+  const filteredDeals = useMemo(() => {
+    if (!livroFilter) return deals;
+    if (livroFilter === "N/A") {
+      return deals.filter((d) => !d.livro || d.livro === "N/A");
+    }
+    return deals.filter((d) => d.livro === livroFilter);
+  }, [deals, livroFilter]);
 
   const metrics = useMemo(() => buildDashboardMetrics(filteredDeals), [filteredDeals]);
   const livroInsights = useMemo(() => buildLivroInsights(filteredDeals), [filteredDeals]);
@@ -59,6 +62,7 @@ export function InsightsContent({ deals }: { deals: Deal[] }) {
             className="rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand-500"
           >
             <option value="">Todos os livros</option>
+            <option value="N/A">N/A</option>
             {livroOptions.map((l) => (
               <option key={l} value={l}>
                 {l}
