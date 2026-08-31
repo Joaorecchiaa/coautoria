@@ -69,7 +69,7 @@ function buildRow(
   const wonDate = (deal.won_time || deal.close_time || "").slice(0, 10);
   return [
     wonDate, // A - Data Inclusao
-    "", // B - LIVRO (preenchimento manual)
+    "N/A", // B - LIVRO (preenchimento manual — começa como N/A até alguém escolher o livro)
     "-", // C - SIMONATO (pendente de double-check manual)
     deal.title || "", // D - Nome Coautor
     wonDate, // E - Data Fechamento
