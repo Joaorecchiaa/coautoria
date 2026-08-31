@@ -12,7 +12,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const [catalog, rows] = await Promise.all([getLivrosCatalog(), getSheetRows()]);
-    const fromDeals = rows.map((r) => (r[1] || "").trim()).filter(Boolean);
+    const fromDeals = rows
+      .map((r) => (r[1] || "").trim())
+      .filter((nome) => nome && nome.toUpperCase() !== "N/A");
 
     const byKey = new Map<string, { nome: string; vagas: number | null }>();
     for (const entry of catalog) {
