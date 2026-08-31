@@ -177,7 +177,7 @@ export function buildLivroInsights(deals: Deal[]): {
 } {
   const map = new Map<string, Deal[]>();
   for (const d of deals) {
-    if (!d.livro) continue;
+    if (!d.livro || d.livro === "N/A") continue;
     if (!map.has(d.livro)) map.set(d.livro, []);
     map.get(d.livro)!.push(d);
   }
