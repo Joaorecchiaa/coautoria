@@ -421,12 +421,11 @@ function DealsTableGrid({
                   <td className="break-words px-3 py-3 text-muted">{d.dataFechamento || "—"}</td>
                   <td className="px-3 py-3">
                     <select
-                      value={d.livro || ""}
+                      value={d.livro && d.livro !== "" ? d.livro : "N/A"}
                       disabled={isSavingLivro}
                       onChange={(e) => onLivroChange(d.rowNumber, e.target.value)}
                       className="w-full rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand-500 disabled:opacity-60"
                     >
-                      <option value="">Selecionar...</option>
                       <option value="N/A">N/A</option>
                       {livroOptions.map((l) => (
                         <option key={l} value={l}>
