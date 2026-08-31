@@ -63,7 +63,9 @@ export function DealsTable({
       list = list.filter((d) => d.simonato.toUpperCase() !== "OK");
     }
     if (livroFilter) {
-      list = list.filter((d) => d.livro === livroFilter);
+      list = list.filter((d) =>
+        livroFilter === "N/A" ? !d.livro || d.livro === "N/A" : d.livro === livroFilter
+      );
     }
     if (query.trim()) {
       const q = query.trim().toLowerCase();
@@ -229,6 +231,7 @@ export function DealsTable({
             className="rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-brand-500"
           >
             <option value="">Todos os livros</option>
+            <option value="N/A">N/A</option>
             {livroOptions.map((l) => (
               <option key={l} value={l}>
                 {l}
