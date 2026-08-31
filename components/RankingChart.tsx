@@ -13,6 +13,30 @@ import { formatBRL } from "@/lib/metrics";
 
 type Row = { name: string; count: number; value: number };
 
+// Tooltip customizado: mostra o valor em R$ e o número de vendas juntos,
+// no mesmo quadradinho, independente de qual métrica dimensiona as barras.
+function CustomTooltip({ active, payload }: any) {
+  if (!active || !payload || !payload.length) return null;
+  const row = payload[0].payload as Row;
+  return (
+    <div
+      style={{
+        borderRadius: 8,
+        border: "1px solid #e4e7ec",
+        background: "#fff",
+        padding: "8px 12px",
+        fontSize: 13,
+      }}
+    >
+      <div style={{ color: "#111827", fontWeight: 500 }}>{row.name}</div>
+      <div style={{ color: "#3d6dfb" }}>Valor: {formatBRL(row.value)}</div>
+      <div style={{ color: "#0f9d8c" }}>
+        Vendas: {row.count} venda{row.count === 1 ? "" : "s"}
+      </div>
+    </div>
+  );
+}
+
 export function RankingChart({
   data,
   color,
@@ -43,16 +67,7 @@ export function RankingChart({
           axisLine={{ stroke: "#e4e7ec" }}
           tickLine={false}
         />
-        <Tooltip
-          formatter={(v: number) =>
-            metric === "value" ? formatBRL(v) : `${v} venda(s)`
-          }
-          contentStyle={{
-            borderRadius: 8,
-            border: "1px solid #e4e7ec",
-            fontSize: 13,
-          }}
-        />
+        <Tooltip content={<CustomTooltip />} />
         <Bar dataKey={metric} fill={color} radius={[0, 4, 4, 0]} maxBarSize={18} />
       </BarChart>
     </ResponsiveContainer>
