@@ -21,7 +21,7 @@ function parseDateFlexible(dateStr: string): Date | null {
 // recalculados só com as vendas daquele livro.
 export function InsightsContent({ deals }: { deals: Deal[] }) {
   const livroOptions = useMemo(() => {
-    const set = new Set(deals.map((d) => d.livro).filter(Boolean));
+    const set = new Set(deals.map((d) => d.livro).filter((l) => l && l !== "N/A"));
     return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [deals]);
 
