@@ -53,6 +53,7 @@ export function DealsTable({
       ...livroCatalog.map((l) => l.nome),
       ...dealsState.map((d) => d.livro).filter(Boolean),
     ]);
+    set.delete("N/A");
     return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [dealsState, livroCatalog]);
 
@@ -426,6 +427,7 @@ function DealsTableGrid({
                       className="w-full rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand-500 disabled:opacity-60"
                     >
                       <option value="">Selecionar...</option>
+                      <option value="N/A">N/A</option>
                       {livroOptions.map((l) => (
                         <option key={l} value={l}>
                           {l}
