@@ -103,6 +103,17 @@ export async function setLivro(rowNumber: number, livro: string) {
   });
 }
 
+// Define o valor da coluna O (OBS) de uma venda específica.
+export async function setObs(rowNumber: number, obs: string) {
+  const sheets = sheetsClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: spreadsheetId(),
+    range: `${tabName()}!O${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[obs]] },
+  });
+}
+
 // Catálogo de livros cadastrados: guardado nas colunas Q (nome) e R (vagas)
 // da mesma aba (mesma planilha, sem precisar de uma segunda aba), separado da
 // coluna B (que guarda o livro de cada venda). Assim dá pra cadastrar um
