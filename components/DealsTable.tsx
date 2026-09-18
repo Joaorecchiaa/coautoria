@@ -26,6 +26,7 @@ export function DealsTable({
   const [savingRow, setSavingRow] = useState<number | null>(null);
   const [errorRow, setErrorRow] = useState<number | null>(null);
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
+  const [savingObsRow, setSavingObsRow] = useState<number | null>(null);
 
   useEffect(() => {
     if (pendentesSignal) {
@@ -135,6 +136,27 @@ export function DealsTable({
       // silencioso — o select volta pro valor salvo no próximo carregamento
     } finally {
       setSavingLivroRow(null);
+    }
+  }
+
+  async function updateObs(rowNumber: number, obs: string) {
+    const current = dealsState.find((d) => d.rowNumber === rowNumber)?.obs || "";
+    if (obs === current) return; // nada mudou, não precisa salvar
+    setSavingObsRow(rowNumber);
+    try {
+      const res = await fetch("/api/set-obs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowNumber, obs }),
+      });
+      if (!res.ok) throw new Error("falha ao salvar observação");
+      setDealsState((prev) =>
+        prev.map((d) => (d.rowNumber === rowNumber ? { ...d, obs } : d))
+      );
+    } catch {
+      // silencioso — o campo volta pro valor salvo no próximo carregamento
+    } finally {
+      setSavingObsRow(null);
     }
   }
 
@@ -314,6 +336,8 @@ export function DealsTable({
           savingLivroRow={savingLivroRow}
           copiedCell={copiedCell}
           onCopy={handleCopy}
+          onObsChange={updateObs}
+          savingObsRow={savingObsRow}
           emptyLabel="Nenhuma venda fechada este mês ainda."
         />
       </div>
@@ -349,6 +373,8 @@ export function DealsTable({
                     savingLivroRow={savingLivroRow}
                     copiedCell={copiedCell}
                     onCopy={handleCopy}
+                    onObsChange={updateObs}
+                    savingObsRow={savingObsRow}
                   />
                 </div>
               </details>
@@ -370,6 +396,8 @@ function DealsTableGrid({
   savingLivroRow,
   copiedCell,
   onCopy,
+  onObsChange,
+  savingObsRow,
   emptyLabel = "Nenhuma venda encontrada.",
 }: {
   deals: Deal[];
@@ -381,6 +409,8 @@ function DealsTableGrid({
   savingLivroRow: number | null;
   copiedCell: string | null;
   onCopy: (rowNumber: number, field: string, value: string) => void;
+  onObsChange: (rowNumber: number, obs: string) => void;
+  savingObsRow: number | null;
   emptyLabel?: string;
 }) {
   return (
@@ -388,14 +418,15 @@ function DealsTableGrid({
       <div className="max-h-[560px] overflow-y-auto">
         <table className="w-full table-fixed text-sm">
           <colgroup>
+            <col className="w-[7%]" />
+            <col className="w-[10%]" />
+            <col className="w-[11%]" />
+            <col className="w-[9%]" />
+            <col className="w-[12%]" />
+            <col className="w-[7%]" />
+            <col className="w-[8%]" />
             <col className="w-[8%]" />
             <col className="w-[13%]" />
-            <col className="w-[13%]" />
-            <col className="w-[14%]" />
-            <col className="w-[8%]" />
-            <col className="w-[9%]" />
-            <col className="w-[9%]" />
-            <col className="w-[15%]" />
             <col className="w-[7%]" />
             <col className="w-[4%]" />
           </colgroup>
@@ -405,6 +436,7 @@ function DealsTableGrid({
               <th className="px-3 py-3">Livro</th>
               <th className="px-3 py-3">Coautor</th>
               <th className="px-3 py-3">Entregável</th>
+              <th className="px-3 py-3">Observação</th>
               <th className="px-3 py-3 text-right">Valor</th>
               <th className="px-3 py-3">Squad</th>
               <th className="px-3 py-3">Closer</th>
@@ -449,6 +481,14 @@ function DealsTableGrid({
                     )}
                   </td>
                   <td className="break-words px-3 py-3 text-muted">{d.entregaveis}</td>
+                  <td className="px-3 py-3">
+                    <ObsField
+                      rowNumber={d.rowNumber}
+                      value={d.obs}
+                      saving={savingObsRow === d.rowNumber}
+                      onSave={onObsChange}
+                    />
+                  </td>
                   <td className="break-words px-3 py-3 text-right tabular-nums">
                     {formatBRL(d.valor)}
                   </td>
@@ -540,7 +580,7 @@ function DealsTableGrid({
             })}
             {deals.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-10 text-center text-muted">
+                <td colSpan={11} className="px-4 py-10 text-center text-muted">
                   {emptyLabel}
                 </td>
               </tr>
@@ -548,6 +588,48 @@ function DealsTableGrid({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// Campo de observação (coluna O da planilha): editável direto na tabela.
+// Guarda um rascunho local pra digitação ficar fluida e só salva quando o
+// usuário sai do campo (onBlur) ou aperta Ctrl+Enter — evita uma chamada de
+// API por tecla digitada.
+function ObsField({
+  rowNumber,
+  value,
+  saving,
+  onSave,
+}: {
+  rowNumber: number;
+  value: string;
+  saving: boolean;
+  onSave: (rowNumber: number, obs: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  return (
+    <div>
+      <textarea
+        rows={2}
+        value={draft}
+        disabled={saving}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => onSave(rowNumber, draft)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder="Observação..."
+        className="w-full resize-none rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand-500 disabled:opacity-60"
+      />
+      {saving ? <div className="mt-0.5 text-xs text-muted">Salvando...</div> : null}
     </div>
   );
 }
